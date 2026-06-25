@@ -12,7 +12,11 @@ Learn more about how to use the code snippet on [github](https://github.com/goog
     // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
 
     // the link to your model provided by Teachable Machine export panel
-    const URL = "{{URL}}";
+    const URL = "https://teachablemachine.withgoogle.com/models/0GQaj4EaF/";
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbxQtf6kjWVc935P5J0dMxy74qO2ewbUadsE8oxV7jyANmIL2zHQMAwcE0GqM3olhPWm/exec";
+
+let lastScan = "";
+let lastTime = 0;
 
     let model, webcam, labelContainer, maxPredictions;
 
@@ -43,21 +47,67 @@ Learn more about how to use the code snippet on [github](https://github.com/goog
         }
     }
 
-    async function loop() {
-        webcam.update(); // update the webcam frame
-        await predict();
-        window.requestAnimationFrame(loop);
-    }
-
-    // run the webcam image through the image model
     async function predict() {
-        // predict can take in an image, video or canvas html element
-        const prediction = await model.predict(webcam.canvas);
-        for (let i = 0; i < maxPredictions; i++) {
-            const classPrediction =
-                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-            labelContainer.childNodes[i].innerHTML = classPrediction;
+
+    const prediction = await model.predict(webcam.canvas);
+
+    let terbaik = prediction[0];
+
+    for (let i = 1; i < prediction.length; i++) {
+        if (prediction[i].probability > terbaik.probability) {
+            terbaik = prediction[i];
         }
     }
+
+    // papar semua keputusan AI
+    for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.childNodes[i].innerHTML =
+            prediction[i].className + " : " +
+            (prediction[i].probability * 100).toFixed(2) + "%";
+    }
+
+    // hanya rekod jika keyakinan melebihi 95%
+    if (terbaik.probability > 0.95) {
+
+        const sekarang = Date.now();
+
+        // elak rekod berganda dalam tempoh 5 saat
+        if (terbaik.className != lastScan || (sekarang-lastTime)>5000){
+
+            lastScan = terbaik.className;
+            lastTime = sekarang;
+
+            fetch(SHEET_URL,{
+                method:"POST",
+                headers:{
+                    "Content-Type":"application/json"
+                },
+                body:JSON.stringify({
+
+                    tarikh:new Date().toLocaleDateString("ms-MY"),
+
+                    masa:new Date().toLocaleTimeString("ms-MY"),
+
+                    nama:terbaik.className,
+
+                    kelas:"",
+
+                    idrmt:terbaik.className,
+
+                    status:"HADIR",
+
+                    ketepatan:(terbaik.probability*100).toFixed(2)
+
+                })
+
+            });
+
+            console.log("Rekod dihantar");
+
+        }
+
+    }
+
+}
 </script>
 ```
